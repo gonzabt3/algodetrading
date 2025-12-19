@@ -1,0 +1,28 @@
+{
+    "ma_crossover": {
+        "name": "Moving Average Crossover",
+        "description": "Buy when fast MA crosses above slow MA, sell when crosses below",
+        "params": {
+            "fast_period": 20,
+            "slow_period": 50
+        }
+    },
+    "rsi": {
+        "name": "RSI Strategy",
+        "description": "Buy when RSI is oversold, sell when overbought",
+        "params": {
+            "period": 14,
+            "oversold": 30,
+            "overbought": 70
+        }
+    },
+    "macd": {
+        "name": "MACD Strategy",
+        "description": "Buy when MACD crosses above signal, sell when crosses below",
+        "params": {
+            "fast": 12,
+            "slow": 26,
+            "signal": 9
+        }
+    }
+}

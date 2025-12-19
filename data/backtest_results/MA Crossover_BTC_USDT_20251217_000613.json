@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-12-17T00:06:13.893186",
+  "strategy": "MA Crossover",
+  "symbol": "BTC/USDT",
+  "params": {
+    "fast_period": 20,
+    "slow_period": 50
+  },
+  "results": {
+    "initial_capital": 10000,
+    "final_capital": 11937.5,
+    "total_return": 19.37,
+    "sharpe_ratio": 0.54,
+    "max_drawdown": -19.57,
+    "total_trades": 4,
+    "win_rate": 100.0
+  },
+  "trades": [
+    {
+      "type": "BUY",
+      "price": 103.1,
+      "shares": 96
+    },
+    {
+      "type": "SELL",
+      "price": 94.23,
+      "shares": 96
+    }
+  ]
+}
