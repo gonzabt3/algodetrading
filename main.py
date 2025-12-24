@@ -9,6 +9,7 @@ import pandas as pd
 from strategies.ma_crossover import MovingAverageCrossover
 from strategies.rsi_strategy import RSIStrategy
 from strategies.macd_strategy import MACDStrategy
+from strategies.bollinger_bands import BollingerBandsStrategy
 from backtesting.backtester import Backtester
 from utils.data_fetcher import DataFetcher
 from utils.visualizer import plot_results
@@ -32,7 +33,7 @@ def main():
     parser.add_argument(
         '--strategy',
         type=str,
-        choices=['ma_crossover', 'rsi', 'macd'],
+        choices=['ma_crossover', 'rsi', 'macd', 'bollinger_bands'],
         default='ma_crossover',
         help='Trading strategy to use'
     )
@@ -89,6 +90,10 @@ def main():
     elif args.strategy == 'macd':
         strategy = MACDStrategy(
             params={'fast': 12, 'slow': 26, 'signal': 9}
+        )
+    elif args.strategy == 'bollinger_bands':
+        strategy = BollingerBandsStrategy(
+            params={'period': 20, 'std_dev': 2.0}
         )
     else:
         logger.error(f"Unknown strategy: {args.strategy}")

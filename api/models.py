@@ -240,12 +240,19 @@ class StrategyInfo(BaseModel):
 class BacktestRequest(BaseModel):
     """Request to run a backtest"""
     strategy_id: str = Field(..., description="Strategy ID to use")
+    strategy_type: Optional[str] = Field(None, description="Alias for strategy_id")
     symbol: str = Field(default="BTC/USDT", description="Trading symbol")
     days: int = Field(default=365, ge=1, le=3650, description="Days of historical data")
     initial_capital: float = Field(default=10000, gt=0, description="Initial capital")
     commission: float = Field(default=0.001, ge=0, le=0.1, description="Commission rate")
     params: Optional[Dict[str, Any]] = Field(default=None, description="Strategy parameters")
     use_real_data: bool = Field(default=False, description="Use real market data vs synthetic")
+    
+    def __init__(self, **data):
+        # Allow strategy_type as alias for strategy_id
+        if 'strategy_type' in data and 'strategy_id' not in data:
+            data['strategy_id'] = data['strategy_type']
+        super().__init__(**data)
 
 
 class BacktestResponse(BaseModel):

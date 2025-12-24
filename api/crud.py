@@ -114,14 +114,26 @@ def update_backtest_results(
     execution_time: float = None
 ) -> Backtest:
     """Update backtest with results"""
+    import numpy as np
+    
+    # Helper function to convert numpy types to Python native types
+    def to_native_type(value):
+        if value is None:
+            return None
+        if isinstance(value, (np.integer, np.floating)):
+            return float(value)
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        return value
+    
     backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
     if backtest:
-        backtest.final_capital = results.get('final_capital')
-        backtest.total_return = results.get('total_return')
-        backtest.sharpe_ratio = results.get('sharpe_ratio')
-        backtest.max_drawdown = results.get('max_drawdown')
-        backtest.total_trades = results.get('total_trades')
-        backtest.win_rate = results.get('win_rate')
+        backtest.final_capital = to_native_type(results.get('final_capital'))
+        backtest.total_return = to_native_type(results.get('total_return'))
+        backtest.sharpe_ratio = to_native_type(results.get('sharpe_ratio'))
+        backtest.max_drawdown = to_native_type(results.get('max_drawdown'))
+        backtest.total_trades = to_native_type(results.get('total_trades'))
+        backtest.win_rate = to_native_type(results.get('win_rate'))
         backtest.status = "completed"
         if execution_time:
             backtest.execution_time = execution_time
@@ -217,14 +229,29 @@ def create_trade(
 
 def bulk_create_trades(db: Session, backtest_id: int, trades_data: List[dict]):
     """Bulk create trades for a backtest"""
+    import numpy as np
+    import pandas as pd
+    
+    # Helper function to convert numpy/pandas types to Python native types
+    def to_native_type(value):
+        if value is None:
+            return None
+        if isinstance(value, (np.integer, np.floating)):
+            return float(value)
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        if isinstance(value, (pd.Timestamp, pd.DatetimeTZDtype)):
+            return value.to_pydatetime() if hasattr(value, 'to_pydatetime') else value
+        return value
+    
     trades = []
     for trade_data in trades_data:
         trade = Trade(
             backtest_id=backtest_id,
             trade_type=trade_data.get('type', 'BUY'),
-            entry_date=trade_data.get('date'),
-            entry_price=trade_data.get('price'),
-            shares=trade_data.get('shares')
+            entry_date=to_native_type(trade_data.get('date')),
+            entry_price=to_native_type(trade_data.get('price')),
+            shares=to_native_type(trade_data.get('shares'))
         )
         trades.append(trade)
     

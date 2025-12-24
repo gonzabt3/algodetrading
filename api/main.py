@@ -334,7 +334,7 @@ async def run_backtest(request: BacktestRequest, db: Session = Depends(get_db)):
         
         # Create strategy instance
         params = request.params if request.params else strategy_info['params']
-        strategy = strategy_info['class'](**params)
+        strategy = strategy_info['class'](params=params)
         
         # Run backtest
         backtester = Backtester(
@@ -389,6 +389,16 @@ async def run_backtest(request: BacktestRequest, db: Session = Depends(get_db)):
             'error': str(e)
         })
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Endpoint simplificado para el frontend
+@app.post("/api/backtest")
+async def run_simple_backtest(
+    request: BacktestRequest,
+    db: Session = Depends(get_db)
+):
+    """Endpoint simplificado para ejecutar backtest desde frontend"""
+    return await run_backtest(request, db)
 
 
 @app.get("/api/market-data/{symbol}")

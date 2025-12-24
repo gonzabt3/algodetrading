@@ -75,7 +75,7 @@ class Backtester:
         for i in range(len(data)):
             row = data.iloc[i]
             signal = row.get('signal', 0)
-            price = row['close']
+            price = float(row['close'])  # Convert to native Python float
             
             # Buy signal
             if signal == 1 and position == 0:
@@ -87,9 +87,9 @@ class Backtester:
                     trades.append({
                         'type': 'BUY',
                         'date': row.name,
-                        'price': price,
-                        'shares': shares,
-                        'capital': capital
+                        'price': float(price),
+                        'shares': int(shares),
+                        'capital': float(capital)
                     })
                     self.logger.info(f"BUY: {shares} shares at {price}")
             
@@ -100,9 +100,9 @@ class Backtester:
                 trades.append({
                     'type': 'SELL',
                     'date': row.name,
-                    'price': price,
-                    'shares': position,
-                    'capital': capital
+                    'price': float(price),
+                    'shares': int(position),
+                    'capital': float(capital)
                 })
                 self.logger.info(f"SELL: {position} shares at {price}")
                 position = 0
@@ -113,15 +113,15 @@ class Backtester:
         
         # Close any remaining position
         if position > 0:
-            final_price = data.iloc[-1]['close']
+            final_price = float(data.iloc[-1]['close'])
             revenue = position * final_price * (1 - self.commission - self.slippage)
             capital += revenue
             trades.append({
-                'type': 'SELL (CLOSE)',
+                'type': 'SELL',  # Changed from 'SELL (CLOSE)' to fit in DB
                 'date': data.index[-1],
-                'price': final_price,
-                'shares': position,
-                'capital': capital
+                'price': float(final_price),
+                'shares': int(position),
+                'capital': float(capital)
             })
         
         # Calculate metrics
@@ -175,16 +175,50 @@ class Backtester:
         total_trade_pairs = len(trades) // 2
         win_rate = (winning_trades / total_trade_pairs * 100) if total_trade_pairs > 0 else 0
         
+        # Convert numpy types to native Python types
+        def to_python_type(value):
+            if isinstance(value, (np.integer, np.floating)):
+                return float(value)
+            if isinstance(value, np.ndarray):
+                return value.tolist()
+            return value
+        
+        # Preparar datos de velas con indicadores para el gráfico
+        chart_data = []
+        data_with_indicators = self.strategy.calculate_indicators(data.copy())
+        
+        # Limitar a los últimos 100 puntos para no sobrecargar el frontend
+        display_data = data_with_indicators.tail(100)
+        
+        for idx, row in display_data.iterrows():
+            point = {
+                'timestamp': idx.isoformat() if hasattr(idx, 'isoformat') else str(idx),
+                'open': float(row['open']) if 'open' in row and not pd.isna(row['open']) else None,
+                'high': float(row['high']) if 'high' in row and not pd.isna(row['high']) else None,
+                'low': float(row['low']) if 'low' in row and not pd.isna(row['low']) else None,
+                'close': float(row['close']) if 'close' in row and not pd.isna(row['close']) else None,
+                'volume': float(row['volume']) if 'volume' in row and not pd.isna(row['volume']) else None,
+            }
+            
+            # Agregar indicadores técnicos si existen
+            for col in row.index:
+                if col not in ['open', 'high', 'low', 'close', 'volume', 'signal']:
+                    if not pd.isna(row[col]):
+                        point[col] = float(row[col])
+            
+            chart_data.append(point)
+        
         return {
-            'initial_capital': self.initial_capital,
-            'final_capital': final_capital,
-            'total_return': total_return,
-            'sharpe_ratio': sharpe_ratio,
-            'max_drawdown': max_drawdown,
-            'total_trades': len(trades),
-            'win_rate': win_rate,
+            'initial_capital': float(self.initial_capital),
+            'final_capital': float(final_capital),
+            'total_return': float(total_return),
+            'sharpe_ratio': float(sharpe_ratio) if not np.isnan(sharpe_ratio) else 0.0,
+            'max_drawdown': float(max_drawdown) if not np.isnan(max_drawdown) else 0.0,
+            'total_trades': int(len(trades)),
+            'win_rate': float(win_rate),
             'trades': trades,
-            'equity_curve': equity_curve
+            'equity_curve': [float(x) for x in equity_curve],
+            'chart_data': chart_data  # Nuevos datos para gráfico de velas
         }
         
         # Guardar resultados si está habilitado

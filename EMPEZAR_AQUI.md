@@ -180,10 +180,24 @@ Pruébala:
 python3 main.py --strategy macd --symbol BTC/USDT --days 90
 ```
 
+**OPCIÓN 4: Bollinger Bands (Bandas de Bollinger)**
+```
+Concepto: Compra cuando el precio toca la banda inferior (barato)
+         Vende cuando toca la banda superior (caro)
+
+Para quién: Principiantes con experiencia básica
+Complejidad: ⭐⭐ (fácil-medio)
+Riesgo: Medio
+Operaciones: Frecuentes (15-25 al mes)
+
+Pruébala:
+python3 main.py --strategy bollinger_bands --symbol BTC/USDT --days 90
+```
+
 #### 6️⃣ Ejercicio práctico:
 
 ```bash
-# Ejecuta las 3 y anota los resultados
+# Ejecuta las 4 estrategias y anota los resultados
 
 echo "MA Crossover:" > mis_resultados.txt
 python3 main.py --strategy ma_crossover --symbol BTC/USDT --days 90 >> mis_resultados.txt
@@ -193,6 +207,9 @@ python3 main.py --strategy rsi --symbol BTC/USDT --days 90 >> mis_resultados.txt
 
 echo "\nMACD:" >> mis_resultados.txt
 python3 main.py --strategy macd --symbol BTC/USDT --days 90 >> mis_resultados.txt
+
+echo "\nBollinger Bands:" >> mis_resultados.txt
+python3 main.py --strategy bollinger_bands --symbol BTC/USDT --days 90 >> mis_resultados.txt
 
 # Lee tus resultados
 cat mis_resultados.txt
