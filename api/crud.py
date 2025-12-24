@@ -16,6 +16,148 @@ from api.models import (
 
 
 # ============================================================================
+# MARKET DATA CRUD
+# ============================================================================
+
+def save_market_data_batch(db: Session, data_list: list) -> int:
+    """Guardar múltiples registros de datos de mercado"""
+    try:
+        # Eliminar duplicados existentes
+        if data_list:
+            symbol = data_list[0]['symbol']
+            db.query(MarketData).filter(MarketData.symbol == symbol).delete()
+            db.commit()
+        
+        # Insertar nuevos registros
+        records = []
+        for data in data_list:
+            record = MarketData(
+                symbol=data['symbol'],
+                asset_type=data.get('asset_type', 'crypto'),
+                timestamp=data['timestamp'],
+                timeframe=data.get('timeframe', '1d'),
+                open=float(data['open']),
+                high=float(data['high']),
+                low=float(data['low']),
+                close=float(data['close']),
+                volume=float(data['volume'])
+            )
+            records.append(record)
+        
+        db.bulk_save_objects(records)
+        db.commit()
+        return len(records)
+    except Exception as e:
+        db.rollback()
+        raise e
+
+
+def get_market_data(
+    db: Session,
+    symbol: str,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    timeframe: str = '1d',
+    limit: int = 10000
+) -> List[MarketData]:
+    """Obtener datos de mercado de la base de datos"""
+    query = db.query(MarketData).filter(
+        and_(
+            MarketData.symbol == symbol,
+            MarketData.timeframe == timeframe
+        )
+    )
+    
+    if start_date:
+        query = query.filter(MarketData.timestamp >= start_date)
+    if end_date:
+        query = query.filter(MarketData.timestamp <= end_date)
+    
+    query = query.order_by(MarketData.timestamp.asc()).limit(limit)
+    
+    return query.all()
+
+
+def delete_market_data(db: Session, symbol: str) -> int:
+    """Eliminar todos los datos de un símbolo"""
+    count = db.query(MarketData).filter(MarketData.symbol == symbol).delete()
+    db.commit()
+    return count
+
+
+def get_data_source(db: Session, symbol: str) -> Optional['DataSource']:
+    """Obtener información de una fuente de datos"""
+    from api.models import DataSource
+    return db.query(DataSource).filter(DataSource.symbol == symbol).first()
+
+
+def get_all_data_sources(db: Session, asset_type: Optional[str] = None) -> List['DataSource']:
+    """Obtener todas las fuentes de datos"""
+    from api.models import DataSource
+    query = db.query(DataSource)
+    if asset_type:
+        query = query.filter(DataSource.asset_type == asset_type)
+    return query.order_by(DataSource.symbol).all()
+
+
+def create_or_update_data_source(
+    db: Session,
+    symbol: str,
+    asset_type: str,
+    name: str,
+    exchange: Optional[str] = None
+) -> 'DataSource':
+    """Crear o actualizar metadatos de fuente de datos"""
+    from api.models import DataSource
+    
+    source = get_data_source(db, symbol)
+    
+    if source:
+        source.name = name
+        source.asset_type = asset_type
+        source.exchange = exchange
+        source.last_updated = datetime.now()
+    else:
+        source = DataSource(
+            symbol=symbol,
+            asset_type=asset_type,
+            name=name,
+            exchange=exchange,
+            last_updated=datetime.now()
+        )
+        db.add(source)
+    
+    db.commit()
+    db.refresh(source)
+    return source
+
+
+def update_data_source_stats(db: Session, symbol: str) -> Optional['DataSource']:
+    """Actualizar estadísticas de una fuente de datos"""
+    from api.models import DataSource
+    from sqlalchemy import func
+    
+    source = get_data_source(db, symbol)
+    if not source:
+        return None
+    
+    stats = db.query(
+        func.count(MarketData.id).label('count'),
+        func.min(MarketData.timestamp).label('min_date'),
+        func.max(MarketData.timestamp).label('max_date')
+    ).filter(MarketData.symbol == symbol).first()
+    
+    source.total_records = stats.count or 0
+    source.min_date = stats.min_date
+    source.max_date = stats.max_date
+    source.last_updated = datetime.now()
+    
+    db.commit()
+    db.refresh(source)
+    return source
+
+
+# ============================================================================
 # STRATEGY CRUD
 # ============================================================================
 

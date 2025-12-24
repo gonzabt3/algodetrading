@@ -301,9 +301,10 @@ async def run_backtest(request: BacktestRequest, db: Session = Depends(get_db)):
         # Get market data
         if request.use_real_data:
             print(f"Fetching real data for {request.symbol}...")
+            start_date = datetime.now() - timedelta(days=request.days)
             data = data_fetcher.fetch_historical_data(
                 symbol=request.symbol,
-                days=request.days
+                start_date=start_date
             )
             if data is None or data.empty:
                 raise HTTPException(status_code=400, detail="Failed to fetch market data")
@@ -408,7 +409,11 @@ async def get_market_data(
 ):
     """Get market data for a symbol"""
     try:
-        data = data_fetcher.fetch_historical_data(symbol=symbol, days=days)
+        start_date = datetime.now() - timedelta(days=days)
+        data = data_fetcher.fetch_historical_data(
+            symbol=symbol,
+            start_date=start_date
+        )
         if data is None or data.empty:
             raise HTTPException(status_code=404, detail="No data found")
         
@@ -425,6 +430,257 @@ async def get_market_data(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# DATA MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@app.post("/api/data/fetch")
+async def fetch_market_data(
+    symbol: str,
+    timeframe: str = '1d',
+    days: int = 365,
+    asset_type: str = 'crypto',
+    db: Session = Depends(get_db)
+):
+    """
+    Descargar datos desde Binance API y guardar en la base de datos
+    
+    Args:
+        symbol: Símbolo en formato ccxt (ej: BTC/USDT)
+        timeframe: Temporalidad (1d, 4h, 1h, etc.)
+        days: Número de días históricos a descargar
+        asset_type: Tipo de activo (crypto, stock, forex, commodity, index)
+    """
+    try:
+        result = data_fetcher.fetch_and_store_binance_data(
+            symbol=symbol,
+            timeframe=timeframe,
+            days=days,
+            asset_type=asset_type
+        )
+        
+        if result['success']:
+            return {
+                'status': 'success',
+                'message': f'Datos guardados exitosamente para {symbol}',
+                'data': result
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Error desconocido'))
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/data/sources")
+async def get_data_sources(asset_type: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Obtener lista de todas las fuentes de datos disponibles
+    
+    Args:
+        asset_type: Filtrar por tipo de activo (opcional)
+    """
+    try:
+        sources = data_fetcher.get_available_symbols(asset_type)
+        return {
+            'status': 'success',
+            'count': len(sources),
+            'sources': sources
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/data/{symbol}")
+async def delete_market_data_endpoint(symbol: str, db: Session = Depends(get_db)):
+    """
+    Eliminar todos los datos de un símbolo
+    
+    Args:
+        symbol: Símbolo a eliminar (formato: BTC_USDT)
+    """
+    try:
+        # El símbolo viene en formato BTC_USDT desde el frontend
+        count = crud.delete_market_data(db, symbol)
+        
+        if count > 0:
+            return {
+                'status': 'success',
+                'message': f'Eliminados {count} registros de {symbol}',
+                'deleted_count': count
+            }
+        else:
+            return {
+                'status': 'warning',
+                'message': f'No se encontraron datos para {symbol}',
+                'deleted_count': 0
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/data/{symbol}/refresh")
+async def refresh_market_data(
+    symbol: str,
+    timeframe: str = '1d',
+    days: int = 365,
+    db: Session = Depends(get_db)
+):
+    """
+    Actualizar datos de un símbolo (eliminar y volver a descargar)
+    
+    Args:
+        symbol: Símbolo en formato ccxt (ej: BTC/USDT)
+        timeframe: Temporalidad
+        days: Días históricos
+    """
+    try:
+        # Convertir formato para DB
+        db_symbol = symbol.replace('/', '_')
+        
+        # Eliminar datos existentes
+        crud.delete_market_data(db, db_symbol)
+        
+        # Descargar nuevos datos
+        result = data_fetcher.fetch_and_store_binance_data(
+            symbol=symbol,
+            timeframe=timeframe,
+            days=days
+        )
+        
+        if result['success']:
+            return {
+                'status': 'success',
+                'message': f'Datos actualizados exitosamente para {symbol}',
+                'data': result
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get('error', 'Error desconocido'))
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/data-health/{symbol}")
+async def check_data_health(symbol: str):
+    """Diagnóstico de salud de los datos de mercado (desde API en vivo)"""
+    try:
+        # Obtener datos directamente de la base de datos (últimos 30 días)
+        start_date = datetime.now() - timedelta(days=30)
+        data = data_fetcher.fetch_historical_data(
+            symbol=symbol,
+            start_date=start_date
+        )
+        
+        if data is None or data.empty:
+            return {
+                'status': 'error',
+                'message': 'No se pudieron obtener datos del exchange',
+                'symbol': symbol,
+                'using_real_data': False
+            }
+        
+        # Estadísticas
+        stats = {
+            'status': 'ok',
+            'symbol': symbol,
+            'data_source': 'Live Exchange API (Binance)',
+            'using_real_data': True,
+            'total_records': len(data),
+            'date_range': {
+                'start': str(data.index.min()),
+                'end': str(data.index.max()),
+                'days': (data.index.max() - data.index.min()).days
+            },
+            'price_stats': {
+                'max_high': float(data['high'].max()),
+                'min_low': float(data['low'].min()),
+                'avg_close': float(data['close'].mean()),
+                'current_price': float(data['close'].iloc[-1]),
+                'first_price': float(data['close'].iloc[0])
+            },
+            'data_quality': {
+                'has_nulls': bool(data.isnull().any().any()),
+                'null_count': int(data.isnull().sum().sum()),
+                'columns': list(data.columns)
+            },
+            'recent_data': []
+        }
+        
+        # Últimos 5 registros
+        for idx in range(max(0, len(data) - 5), len(data)):
+            row = data.iloc[idx]
+            stats['recent_data'].append({
+                'date': str(data.index[idx]),
+                'open': float(row['open']),
+                'high': float(row['high']),
+                'low': float(row['low']),
+                'close': float(row['close']),
+                'volume': float(row['volume']) if 'volume' in data.columns else 0
+            })
+        
+        # Verificación de precios realistas
+        if 'BTC' in symbol or 'bitcoin' in symbol.lower():
+            if stats['price_stats']['max_high'] < 1000:
+                stats['warning'] = '⚠️ Los precios de BTC parecen demasiado bajos (< $1,000). Posiblemente datos sintéticos.'
+            elif stats['price_stats']['max_high'] > 20000:
+                stats['verification'] = '✅ Precios de BTC en rango realista (> $20k) - Datos en vivo del exchange'
+        
+        return stats
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': str(e),
+            'symbol': symbol,
+            'using_real_data': False
+        }
+
+
+@app.post("/api/data/validate/{symbol}")
+async def validate_market_data(symbol: str, days: int = 365):
+    """
+    Valida la calidad e integridad de los datos de mercado
+    
+    Verifica:
+    - Valores nulos o faltantes
+    - Valores negativos
+    - Relación OHLC correcta
+    - Outliers extremos
+    - Gaps temporales
+    - Duplicados
+    """
+    try:
+        start_date = datetime.now() - timedelta(days=days)
+        data = data_fetcher.fetch_historical_data(
+            symbol=symbol,
+            start_date=start_date
+        )
+        
+        if data is None or data.empty:
+            return {
+                'status': 'error',
+                'message': f'No hay datos disponibles para {symbol}',
+                'is_valid': False
+            }
+        
+        validation = data_fetcher.validate_data_quality(data, symbol)
+        
+        return {
+            'status': 'success',
+            'symbol': symbol,
+            'timeframe': '1d',
+            **validation
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'message': str(e),
+            'is_valid': False
+        }
 
 
 @app.get("/api/stats/summary")

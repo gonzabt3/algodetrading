@@ -98,14 +98,62 @@ class BrokerCredential(Base):
     # Metadatos de validación
     validation_status = Column(String(20), default="pending")
     last_validated_at = Column(DateTime(timezone=True))
-    validation_error = Column(Text)
+    last_validation_error = Column(Text)
     
-    # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     broker_config = relationship("BrokerConfig", back_populates="credentials")
+
+
+class AssetType(str, Enum):
+    """Tipos de activos soportados"""
+    CRYPTO = "crypto"
+    STOCK = "stock"
+    FOREX = "forex"
+    COMMODITY = "commodity"
+    INDEX = "index"
+
+
+class MarketData(Base):
+    """Datos OHLCV de mercado almacenados en la base de datos"""
+    __tablename__ = "market_data"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(50), index=True, nullable=False)
+    asset_type = Column(String(20), nullable=False, default="crypto")
+    timestamp = Column(DateTime(timezone=True), index=True, nullable=False)
+    timeframe = Column(String(10), default='1d', nullable=False)
+    
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Float, nullable=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DataSource(Base):
+    """Metadatos de fuentes de datos disponibles"""
+    __tablename__ = "data_sources"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String(50), unique=True, nullable=False, index=True)
+    asset_type = Column(String(20), nullable=False)
+    name = Column(String(100), nullable=False)
+    exchange = Column(String(50), nullable=True)
+    last_updated = Column(DateTime(timezone=True), nullable=True)
+    total_records = Column(Integer, default=0)
+    min_date = Column(DateTime(timezone=True), nullable=True)
+    max_date = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(20), default="active")
+    validation_error = Column(Text)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
 class Strategy(Base):
@@ -202,29 +250,6 @@ class EquityPoint(Base):
     backtest = relationship("Backtest", back_populates="equity_curve")
 
 
-class MarketData(Base):
-    """Historical market data cache"""
-    __tablename__ = "market_data"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String(20), nullable=False, index=True)
-    timeframe = Column(String(10), nullable=False, index=True)
-    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
-    
-    open = Column(Float, nullable=False)
-    high = Column(Float, nullable=False)
-    low = Column(Float, nullable=False)
-    close = Column(Float, nullable=False)
-    volume = Column(Float, nullable=False)
-    
-    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Composite unique constraint
-    __table_args__ = (
-        {'schema': None},
-    )
-
-
 # ============================================================================
 # Pydantic Schemas (API)
 # ============================================================================
@@ -237,6 +262,7 @@ class StrategyInfo(BaseModel):
     default_params: Dict[str, Any]
 
 
+
 class BacktestRequest(BaseModel):
     """Request to run a backtest"""
     strategy_id: str = Field(..., description="Strategy ID to use")
@@ -246,7 +272,7 @@ class BacktestRequest(BaseModel):
     initial_capital: float = Field(default=10000, gt=0, description="Initial capital")
     commission: float = Field(default=0.001, ge=0, le=0.1, description="Commission rate")
     params: Optional[Dict[str, Any]] = Field(default=None, description="Strategy parameters")
-    use_real_data: bool = Field(default=False, description="Use real market data vs synthetic")
+    use_real_data: bool = Field(default=True, description="Use real market data vs synthetic")
     
     def __init__(self, **data):
         # Allow strategy_type as alias for strategy_id

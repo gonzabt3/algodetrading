@@ -19,6 +19,7 @@ const StrategyRunner = () => {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [history, setHistory] = useState([]);
+  const [dataHealth, setDataHealth] = useState(null);
 
   // Símbolos populares
   const symbols = [
@@ -31,6 +32,21 @@ const StrategyRunner = () => {
     loadStrategies();
     loadHistory();
   }, []);
+
+  // Verificar salud de datos cuando cambia el símbolo
+  useEffect(() => {
+    checkDataHealth();
+  }, [symbol]);
+
+  const checkDataHealth = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/data-health/${symbol}`);
+      setDataHealth(response.data);
+    } catch (err) {
+      console.error('Error checking data health:', err);
+      setDataHealth(null);
+    }
+  };
 
   const loadStrategies = async () => {
     try {
@@ -176,6 +192,34 @@ const StrategyRunner = () => {
                     {strategies.find(s => s.id === selectedStrategy)?.description}
                   </p>
                 )}
+                
+                {/* MA Crossover Configuration Info */}
+                {selectedStrategy === 'ma_crossover' && (
+                  <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                    <h3 className="text-sm font-bold text-blue-900 mb-2 flex items-center">
+                      <span className="mr-2">📊</span>
+                      Configuración de Medias Móviles
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-blue-700 font-medium">Media Rápida:</span>
+                        <span className="text-blue-900 font-bold">20 períodos</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-blue-700 font-medium">Media Lenta:</span>
+                        <span className="text-blue-900 font-bold">50 períodos</span>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-blue-300">
+                        <p className="text-xs text-blue-800">
+                          <span className="font-semibold">Señal de Compra:</span> MA rápida cruza por encima de MA lenta
+                        </p>
+                        <p className="text-xs text-blue-800 mt-1">
+                          <span className="font-semibold">Señal de Venta:</span> MA rápida cruza por debajo de MA lenta
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Symbol Selection */}
@@ -199,6 +243,53 @@ const StrategyRunner = () => {
                     ))}
                   </optgroup>
                 </select>
+                
+                {/* Data Health Check */}
+                {dataHealth && (
+                  <div className={`mt-3 p-3 rounded-lg text-xs ${
+                    dataHealth.status === 'ok' 
+                      ? 'bg-green-50 border border-green-200' 
+                      : 'bg-red-50 border border-red-200'
+                  }`}>
+                    {dataHealth.status === 'ok' ? (
+                      <>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-bold text-green-800">✅ Datos Reales</span>
+                          <span className="text-green-700">{dataHealth.total_records} registros</span>
+                        </div>
+                        <div className="space-y-1 text-green-700">
+                          <div className="flex justify-between">
+                            <span>Máximo histórico:</span>
+                            <span className="font-bold">${dataHealth.price_stats.max_high.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Precio actual:</span>
+                            <span className="font-bold">${dataHealth.price_stats.current_price.toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Rango de fechas:</span>
+                            <span className="font-semibold">{dataHealth.date_range.days} días</span>
+                          </div>
+                        </div>
+                        {dataHealth.verification && (
+                          <div className="mt-2 pt-2 border-t border-green-300 text-green-800">
+                            {dataHealth.verification}
+                          </div>
+                        )}
+                        {dataHealth.warning && (
+                          <div className="mt-2 pt-2 border-t border-yellow-300 text-yellow-800">
+                            {dataHealth.warning}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-red-800">
+                        <div className="font-bold mb-1">❌ Sin datos reales</div>
+                        <div>Se usarán datos sintéticos</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Days Selection */}

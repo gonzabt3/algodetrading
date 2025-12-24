@@ -23,47 +23,69 @@ const CandlestickChart = ({ data, indicators = [] }) => {
 
   // Función para renderizar una vela personalizada
   const CustomCandle = (props) => {
-    const { x, width, payload } = props;
-    if (!payload || payload.open == null || payload.close == null) return null;
+    const { x, y, width, height, payload, yAxisId } = props;
+    
+    if (!payload || payload.open == null || payload.close == null || payload.high == null || payload.low == null) {
+      return null;
+    }
 
-    const isGreen = payload.close >= payload.open;
+    const { open, close, high, low } = payload;
+    const isGreen = close >= open;
     const color = isGreen ? '#10b981' : '#ef4444';
-    const open = payload.open;
-    const close = payload.close;
-    const high = payload.high;
-    const low = payload.low;
-
-    // Calcular posiciones Y
-    const yScale = (value) => {
-      const percentage = (value - minPrice) / priceRange;
-      return 250 - (percentage * 200); // Escala inversa para Y
+    
+    // Obtener el contexto del gráfico para convertir valores a coordenadas Y
+    const chart = props;
+    
+    // Calcular el rango de precios para esta vela
+    const priceMax = Math.max(open, close, high, low);
+    const priceMin = Math.min(open, close, high, low);
+    const priceRange = maxPrice - minPrice;
+    
+    // Calcular posiciones Y basadas en el dominio del eje
+    const chartHeight = 400 - 50; // Altura del gráfico menos márgenes
+    const yScale = (price) => {
+      const normalized = (maxPrice - price) / priceRange;
+      return 10 + (normalized * chartHeight);
     };
-
+    
     const yHigh = yScale(high);
     const yLow = yScale(low);
     const yOpen = yScale(open);
     const yClose = yScale(close);
-    const candleHeight = Math.abs(yClose - yOpen);
-    const candleY = Math.min(yOpen, yClose);
+    
+    const candleTop = Math.min(yOpen, yClose);
+    const candleBottom = Math.max(yOpen, yClose);
+    const candleHeight = Math.abs(yClose - yOpen) || 1;
+    const candleWidth = width * 0.6;
+    const candleX = x + (width - candleWidth) / 2;
 
     return (
       <g>
-        {/* Mecha (wick) */}
+        {/* Mecha superior */}
         <line
           x1={x + width / 2}
           y1={yHigh}
           x2={x + width / 2}
-          y2={yLow}
+          y2={candleTop}
           stroke={color}
           strokeWidth={1}
         />
         {/* Cuerpo de la vela */}
         <rect
-          x={x + width * 0.2}
-          y={candleY}
-          width={width * 0.6}
-          height={candleHeight || 1}
+          x={candleX}
+          y={candleTop}
+          width={candleWidth}
+          height={candleHeight}
           fill={color}
+          stroke={color}
+          strokeWidth={1}
+        />
+        {/* Mecha inferior */}
+        <line
+          x1={x + width / 2}
+          y1={candleBottom}
+          x2={x + width / 2}
+          y2={yLow}
           stroke={color}
           strokeWidth={1}
         />

@@ -104,3 +104,7 @@ results/
 # Database
 *.db
 *.sqlite
+
+# Node.js / Frontend
+web/frontend/node_modules/
+node_modules/
