@@ -267,7 +267,9 @@ class BacktestRequest(BaseModel):
     """Request to run a backtest"""
     strategy_id: str = Field(..., description="Strategy ID to use")
     strategy_type: Optional[str] = Field(None, description="Alias for strategy_id")
-    symbol: str = Field(default="BTC/USDT", description="Trading symbol")
+    symbol: str = Field(default="BTC/USDT", description="Trading symbol (for single-symbol strategies)")
+    symbol_a: Optional[str] = Field(None, description="First symbol for pair trading")
+    symbol_b: Optional[str] = Field(None, description="Second symbol for pair trading")
     days: int = Field(default=365, ge=1, le=3650, description="Days of historical data")
     initial_capital: float = Field(default=10000, gt=0, description="Initial capital")
     commission: float = Field(default=0.001, ge=0, le=0.1, description="Commission rate")

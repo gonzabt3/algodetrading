@@ -5,6 +5,7 @@ import {
   Tooltip, Legend, ResponsiveContainer, Area, AreaChart 
 } from 'recharts';
 import CandlestickChart from './CandlestickChart';
+import PairChart from './PairChart';
 
 const API_URL = 'http://localhost:8000';
 
@@ -13,6 +14,8 @@ const StrategyRunner = () => {
   const [strategies, setStrategies] = useState([]);
   const [selectedStrategy, setSelectedStrategy] = useState('');
   const [symbol, setSymbol] = useState('BTC/USDT');
+  const [symbolA, setSymbolA] = useState('VIST');
+  const [symbolB, setSymbolB] = useState('YPF');
   const [days, setDays] = useState(180);
   const [capital, setCapital] = useState(10000);
   const [loading, setLoading] = useState(false);
@@ -26,6 +29,19 @@ const StrategyRunner = () => {
     'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'ADA/USDT',
     'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA'
   ];
+
+  // Acciones argentinas
+  const argentineStocks = [
+    { value: 'VIST', label: 'VISTA (VIST)' },
+    { value: 'YPF', label: 'YPF (YPF)' },
+    { value: 'GGAL', label: 'Galicia (GGAL)' },
+    { value: 'BMA', label: 'Macro (BMA)' },
+    { value: 'SUPV', label: 'Supervielle (SUPV)' },
+    { value: 'PAM', label: 'Pampa (PAM)' },
+  ];
+
+  // Verificar si la estrategia seleccionada es pair trading
+  const isPairTrading = selectedStrategy === 'pair_trading';
 
   // Cargar estrategias al montar
   useEffect(() => {
@@ -76,17 +92,34 @@ const StrategyRunner = () => {
       return;
     }
 
+    // Validar símbolos para pair trading
+    if (isPairTrading && symbolA === symbolB) {
+      setError('Por favor selecciona símbolos diferentes para pair trading');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResults(null);
 
     try {
-      const response = await axios.post(`${API_URL}/api/backtest`, {
-        strategy_type: selectedStrategy,
-        symbol: symbol,
+      // Construir payload según el tipo de estrategia
+      const payload = {
+        strategy_id: selectedStrategy,
         days: days,
-        initial_capital: capital
-      });
+        initial_capital: capital,
+        commission: 0.001
+      };
+
+      // Agregar símbolos según el tipo de estrategia
+      if (isPairTrading) {
+        payload.symbol_a = symbolA;
+        payload.symbol_b = symbolB;
+      } else {
+        payload.symbol = symbol;
+      }
+
+      const response = await axios.post(`${API_URL}/api/backtest`, payload);
 
       // El response.data contiene el BacktestResponse del backend
       if (response.data.success && response.data.results) {
@@ -223,74 +256,133 @@ const StrategyRunner = () => {
               </div>
 
               {/* Symbol Selection */}
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Símbolo
-                </label>
-                <select
-                  value={symbol}
-                  onChange={(e) => setSymbol(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
-                >
-                  <optgroup label="🪙 Criptomonedas">
-                    {symbols.slice(0, 5).map((sym) => (
-                      <option key={sym} value={sym}>{sym}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="📈 Acciones">
-                    {symbols.slice(5).map((sym) => (
-                      <option key={sym} value={sym}>{sym}</option>
-                    ))}
-                  </optgroup>
-                </select>
-                
-                {/* Data Health Check */}
-                {dataHealth && (
-                  <div className={`mt-3 p-3 rounded-lg text-xs ${
-                    dataHealth.status === 'ok' 
-                      ? 'bg-green-50 border border-green-200' 
-                      : 'bg-red-50 border border-red-200'
-                  }`}>
-                    {dataHealth.status === 'ok' ? (
-                      <>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold text-green-800">✅ Datos Reales</span>
-                          <span className="text-green-700">{dataHealth.total_records} registros</span>
-                        </div>
-                        <div className="space-y-1 text-green-700">
-                          <div className="flex justify-between">
-                            <span>Máximo histórico:</span>
-                            <span className="font-bold">${dataHealth.price_stats.max_high.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Precio actual:</span>
-                            <span className="font-bold">${dataHealth.price_stats.current_price.toLocaleString()}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Rango de fechas:</span>
-                            <span className="font-semibold">{dataHealth.date_range.days} días</span>
-                          </div>
-                        </div>
-                        {dataHealth.verification && (
-                          <div className="mt-2 pt-2 border-t border-green-300 text-green-800">
-                            {dataHealth.verification}
-                          </div>
-                        )}
-                        {dataHealth.warning && (
-                          <div className="mt-2 pt-2 border-t border-yellow-300 text-yellow-800">
-                            {dataHealth.warning}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-red-800">
-                        <div className="font-bold mb-1">❌ Sin datos reales</div>
-                        <div>Se usarán datos sintéticos</div>
-                      </div>
-                    )}
+              {isPairTrading ? (
+                /* Pair Trading: Dos selectores */
+                <>
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Símbolo A (Primera Acción)
+                    </label>
+                    <select
+                      value={symbolA}
+                      onChange={(e) => setSymbolA(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
+                    >
+                      <optgroup label="🪙 Criptomonedas">
+                        <option value="BTC/USDT">BTC/USDT</option>
+                        <option value="ETH/USDT">ETH/USDT</option>
+                        <option value="SOL/USDT">SOL/USDT</option>
+                      </optgroup>
+                      <optgroup label="📈 Acciones Argentinas">
+                        {argentineStocks.map((stock) => (
+                          <option key={stock.value} value={stock.value}>{stock.label}</option>
+                        ))}
+                      </optgroup>
+                    </select>
                   </div>
-                )}
-              </div>
+
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Símbolo B (Segunda Acción)
+                    </label>
+                    <select
+                      value={symbolB}
+                      onChange={(e) => setSymbolB(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
+                    >
+                      <optgroup label="🪙 Criptomonedas">
+                        <option value="BTC/USDT">BTC/USDT</option>
+                        <option value="ETH/USDT">ETH/USDT</option>
+                        <option value="SOL/USDT">SOL/USDT</option>
+                      </optgroup>
+                      <optgroup label="📈 Acciones Argentinas">
+                        {argentineStocks.map((stock) => (
+                          <option key={stock.value} value={stock.value}>{stock.label}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  {/* Advertencia si son iguales */}
+                  {symbolA === symbolB && (
+                    <div className="mb-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
+                      <p className="text-yellow-800 text-sm font-medium">
+                        ⚠️ Advertencia: Ambos símbolos son iguales. Por favor selecciona activos diferentes para pair trading.
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Estrategias de un solo símbolo */
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Símbolo
+                  </label>
+                  <select
+                    value={symbol}
+                    onChange={(e) => setSymbol(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none transition-colors"
+                  >
+                    <optgroup label="🪙 Criptomonedas">
+                      {symbols.slice(0, 5).map((sym) => (
+                        <option key={sym} value={sym}>{sym}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="📈 Acciones">
+                      {symbols.slice(5).map((sym) => (
+                        <option key={sym} value={sym}>{sym}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  
+                  {/* Data Health Check */}
+                  {dataHealth && (
+                    <div className={`mt-3 p-3 rounded-lg text-xs ${
+                      dataHealth.status === 'ok' 
+                        ? 'bg-green-50 border border-green-200' 
+                        : 'bg-red-50 border border-red-200'
+                    }`}>
+                      {dataHealth.status === 'ok' ? (
+                        <>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-green-800">✅ Datos Reales</span>
+                            <span className="text-green-700">{dataHealth.total_records} registros</span>
+                          </div>
+                          <div className="space-y-1 text-green-700">
+                            <div className="flex justify-between">
+                              <span>Máximo histórico:</span>
+                              <span className="font-bold">${dataHealth.price_stats.max_high.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Precio actual:</span>
+                              <span className="font-bold">${dataHealth.price_stats.current_price.toLocaleString()}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Rango de fechas:</span>
+                              <span className="font-semibold">{dataHealth.date_range.days} días</span>
+                            </div>
+                          </div>
+                          {dataHealth.verification && (
+                            <div className="mt-2 pt-2 border-t border-green-300 text-green-800">
+                              {dataHealth.verification}
+                            </div>
+                          )}
+                          {dataHealth.warning && (
+                            <div className="mt-2 pt-2 border-t border-yellow-300 text-yellow-800">
+                              {dataHealth.warning}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-red-800">
+                          <div className="font-bold mb-1">❌ Sin datos reales</div>
+                          <div>Se usarán datos sintéticos</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Days Selection */}
               <div className="mb-6">
@@ -381,6 +473,16 @@ const StrategyRunner = () => {
 
             {results && (
               <div className="space-y-6">
+                {/* Pair Trading Chart - Solo para pair trading */}
+                {isPairTrading && (
+                  <PairChart
+                    symbolA={symbolA}
+                    symbolB={symbolB}
+                    startDate={new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                    endDate={new Date().toISOString().split('T')[0]}
+                  />
+                )}
+
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-white rounded-xl shadow-lg p-4">
@@ -445,7 +547,9 @@ const StrategyRunner = () => {
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Símbolo</div>
-                      <div className="text-lg font-bold text-gray-900">{results.symbol || symbol}</div>
+                      <div className="text-lg font-bold text-gray-900">
+                        {isPairTrading ? `${symbolA} / ${symbolB}` : (results.symbol || symbol)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -503,52 +607,82 @@ const StrategyRunner = () => {
                 {/* Trades Table */}
                 {results.trades && Array.isArray(results.trades) && results.trades.length > 0 && (
                   <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">
-                      📋 Historial de Operaciones
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">
+                      📋 Historial de Operaciones {isPairTrading ? '(Ambas Acciones)' : ''}
                     </h3>
+                    {isPairTrading && (
+                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                        <p className="text-blue-800">
+                          <strong>💡 Pair Trading:</strong> Opera ambas acciones simultáneamente con posiciones opuestas.
+                          <span className="ml-2">
+                            <span className="inline-block bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold mr-1">LONG</span>
+                            = Compra barato, vende caro (ganas si sube ↗)
+                          </span>
+                          <span className="ml-2">
+                            <span className="inline-block bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-bold mr-1">SHORT</span>
+                            = Vende caro, compra barato (ganas si baja ↘)
+                          </span>
+                        </p>
+                      </div>
+                    )}
                     <div className="overflow-x-auto">
-                      <table className="w-full">
+                      <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b-2 border-gray-200">
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Tipo</th>
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Entrada</th>
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Salida</th>
-                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Retorno</th>
+                            {isPairTrading && <th className="text-left py-3 px-2 text-xs font-semibold text-gray-700">Símbolo</th>}
+                            <th className="text-left py-3 px-2 text-xs font-semibold text-gray-700">Tipo</th>
+                            <th className="text-left py-3 px-2 text-xs font-semibold text-gray-700">Entrada</th>
+                            <th className="text-left py-3 px-2 text-xs font-semibold text-gray-700">Salida</th>
+                            <th className="text-right py-3 px-2 text-xs font-semibold text-gray-700">Retorno</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {results.trades.slice(0, 10).map((trade, idx) => (
+                          {results.trades.slice(0, 20).map((trade, idx) => (
                             <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="py-3 px-4">
-                                <span className={`px-2 py-1 rounded text-xs font-bold ${
+                              {isPairTrading && (
+                                <td className="py-2 px-2">
+                                  <span className="font-mono text-xs font-semibold text-blue-600">
+                                    {trade.symbol}
+                                  </span>
+                                </td>
+                              )}
+                              <td className="py-2 px-2">
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${
                                   trade.trade_type === 'LONG' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
+                                    ? 'bg-green-100 text-green-700' 
+                                    : 'bg-red-100 text-red-700'
                                 }`}>
                                   {trade.trade_type || 'LONG'}
                                 </span>
                               </td>
-                              <td className="py-3 px-4 text-sm">
-                                {trade.entry_date ? new Date(trade.entry_date).toLocaleDateString() : '-'}
-                                <br />
-                                <span className="text-xs text-gray-500">
-                                  {formatCurrency(trade.entry_price || 0)}
-                                </span>
+                              <td className="py-2 px-2">
+                                <div className="text-xs font-medium">
+                                  {trade.entry_date ? new Date(trade.entry_date).toLocaleDateString('es-AR', { month: 'short', day: 'numeric' }) : '-'}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  ${(trade.entry_price || 0).toFixed(2)}
+                                </div>
                               </td>
-                              <td className="py-3 px-4 text-sm">
-                                {trade.exit_date ? new Date(trade.exit_date).toLocaleDateString() : '-'}
-                                <br />
-                                <span className="text-xs text-gray-500">
-                                  {formatCurrency(trade.exit_price || 0)}
-                                </span>
+                              <td className="py-2 px-2">
+                                <div className="text-xs font-medium">
+                                  {trade.exit_date ? new Date(trade.exit_date).toLocaleDateString('es-AR', { month: 'short', day: 'numeric' }) : '-'}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  ${(trade.exit_price || 0).toFixed(2)}
+                                </div>
                               </td>
-                              <td className={`py-3 px-4 text-right font-bold ${getReturnColor(trade.return_pct || 0)}`}>
+                              <td className={`py-2 px-2 text-right font-bold text-sm ${getReturnColor(trade.return_pct || 0)}`}>
                                 {formatPercent(trade.return_pct || 0)}
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
+                      {results.trades.length > 20 && (
+                        <div className="mt-4 text-center text-sm text-gray-500">
+                          Mostrando 20 de {results.trades.length} operaciones
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

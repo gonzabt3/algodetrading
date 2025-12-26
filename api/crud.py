@@ -49,7 +49,15 @@ def save_market_data_batch(db: Session, data_list: list) -> int:
         return len(records)
     except Exception as e:
         db.rollback()
-        raise e
+        raise
+
+
+def bulk_insert_market_data(db: Session, records: list) -> int:
+    """
+    Insertar múltiples registros de datos de mercado en bulk.
+    Alias para save_market_data_batch con el mismo formato.
+    """
+    return save_market_data_batch(db, records)
 
 
 def get_market_data(

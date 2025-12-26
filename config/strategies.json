@@ -32,5 +32,26 @@
             "period": 20,
             "std_dev": 2.0
         }
+    },
+    "pair_trading": {
+        "name": "Pair Trading",
+        "description": "Statistical arbitrage between two correlated assets. Long/short when spread deviates from mean.",
+        "type": "multi_symbol",
+        "symbols": ["BTC/USDT", "ETH/USDT"],
+        "params": {
+            "window": 20,
+            "entry_threshold": 2.0,
+            "exit_threshold": 0.5,
+            "hedge_ratio": 1.0,
+            "use_dynamic_hedge": false
+        },
+        "info": {
+            "min_correlation": 0.7,
+            "recommended_pairs": [
+                ["BTC/USDT", "ETH/USDT"],
+                ["EUR/USD", "GBP/USD"],
+                ["AAPL", "MSFT"]
+            ]
+        }
     }
 }
