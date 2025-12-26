@@ -15,10 +15,20 @@ const CandlestickChart = ({ data, indicators = [] }) => {
     );
   }
 
-  // Calcular rango de precios para escalar las velas
-  const prices = data.flatMap(d => [d.high, d.low]).filter(p => p != null);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
+  // Calcular rango de precios incluyendo velas e indicadores
+  const allPriceValues = data.flatMap(d => {
+    const values = [d.high, d.low, d.open, d.close];
+    // Agregar valores de indicadores (MAs, Bollinger Bands, etc)
+    Object.keys(d).forEach(key => {
+      if (!['timestamp', 'open', 'high', 'low', 'close', 'volume'].includes(key) && typeof d[key] === 'number') {
+        values.push(d[key]);
+      }
+    });
+    return values;
+  }).filter(p => p != null && !isNaN(p));
+  
+  const minPrice = Math.min(...allPriceValues);
+  const maxPrice = Math.max(...allPriceValues);
   const priceRange = maxPrice - minPrice;
 
   // Función para renderizar una vela personalizada
@@ -158,12 +168,30 @@ const CandlestickChart = ({ data, indicators = [] }) => {
       )
     : [];
 
+  // Separar indicadores por tipo
+  const priceIndicators = availableIndicators.filter(ind => 
+    ['ma_fast', 'ma_slow', 'sma', 'ema', 'bb_upper', 'bb_middle', 'bb_lower', 'upper_band', 'middle_band', 'lower_band'].includes(ind)
+  );
+  
+  const oscillatorIndicators = availableIndicators.filter(ind => 
+    ['rsi', 'macd', 'signal', 'histogram'].includes(ind)
+  );
+
+  // Debug: mostrar qué indicadores se detectaron
+  console.log('🔍 CandlestickChart - Datos recibidos:', data.length, 'velas');
+  console.log('🔍 Primera vela:', data[0]);
+  console.log('🔍 Indicadores de precio:', priceIndicators);
+  console.log('🔍 Indicadores osciladores:', oscillatorIndicators);
+
   // Colores para diferentes indicadores
   const indicatorColors = {
     'ma_fast': '#3b82f6',
     'ma_slow': '#ef4444',
     'sma': '#8b5cf6',
     'ema': '#10b981',
+    'bb_upper': '#f59e0b',
+    'bb_middle': '#6366f1',
+    'bb_lower': '#f59e0b',
     'upper_band': '#f59e0b',
     'lower_band': '#f59e0b',
     'middle_band': '#6366f1',
@@ -187,10 +215,11 @@ const CandlestickChart = ({ data, indicators = [] }) => {
         </button>
       </div>
 
-      {/* Leyenda de indicadores */}
-      {availableIndicators.length > 0 && (
+      {/* Leyenda de indicadores de precio */}
+      {priceIndicators.length > 0 && (
         <div className="flex flex-wrap gap-3 text-xs">
-          {availableIndicators.map(indicator => (
+          <span className="font-semibold text-gray-600">Indicadores de Precio:</span>
+          {priceIndicators.map(indicator => (
             <div key={indicator} className="flex items-center gap-1">
               <div 
                 className="w-3 h-3 rounded"
@@ -253,30 +282,98 @@ const CandlestickChart = ({ data, indicators = [] }) => {
             />
           )}
 
-          {/* Líneas de indicadores técnicos */}
-          {availableIndicators.map((indicator, idx) => (
-            <Line
-              key={indicator}
-              yAxisId="price"
-              type="monotone"
-              dataKey={indicator}
-              stroke={indicatorColors[indicator] || `hsl(${idx * 60}, 70%, 50%)`}
-              strokeWidth={2}
-              dot={false}
-              name={indicator}
-              connectNulls
-            />
-          ))}
-
-          {/* Renderizar velas manualmente */}
+          {/* Renderizar velas primero (fondo) */}
           <Bar
             yAxisId="price"
             dataKey="close"
             shape={<CustomCandle />}
             name="Precio"
           />
+
+          {/* Líneas de indicadores de precio encima */}
+          {priceIndicators.map((indicator, idx) => (
+            <Line
+              key={indicator}
+              yAxisId="price"
+              type="monotone"
+              dataKey={indicator}
+              stroke={indicatorColors[indicator] || `hsl(${idx * 60}, 70%, 50%)`}
+              strokeWidth={3}
+              dot={false}
+              name={indicator}
+              connectNulls
+            />
+          ))}
         </ComposedChart>
       </ResponsiveContainer>
+
+      {/* Gráfico de Osciladores (RSI, MACD, etc) */}
+      {oscillatorIndicators.length > 0 && (
+        <>
+          <div className="flex flex-wrap gap-3 text-xs mt-4">
+            <span className="font-semibold text-gray-600">Indicadores Osciladores:</span>
+            {oscillatorIndicators.map(indicator => (
+              <div key={indicator} className="flex items-center gap-1">
+                <div 
+                  className="w-3 h-3 rounded"
+                  style={{ backgroundColor: indicatorColors[indicator] || '#6b7280' }}
+                />
+                <span className="text-gray-700 font-medium">{indicator}</span>
+              </div>
+            ))}
+          </div>
+          
+          <ResponsiveContainer width="100%" height={150}>
+            <ComposedChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              
+              <XAxis 
+                dataKey="timestamp"
+                tick={{ fontSize: 11 }}
+                tickFormatter={(value) => {
+                  const date = new Date(value);
+                  return `${date.getMonth() + 1}/${date.getDate()}`;
+                }}
+              />
+              
+              <YAxis 
+                domain={[0, 100]}
+                tick={{ fontSize: 11 }}
+                tickFormatter={(value) => value.toFixed(0)}
+              />
+              
+              <Tooltip 
+                contentStyle={{ fontSize: '12px' }}
+                formatter={(value) => value.toFixed(2)}
+              />
+              <Legend wrapperStyle={{ fontSize: '11px' }} />
+
+              {/* Líneas de referencia para RSI */}
+              {oscillatorIndicators.includes('rsi') && (
+                <>
+                  <ReferenceLine y={70} stroke="#ef4444" strokeDasharray="3 3" label="Sobrecompra" />
+                  <ReferenceLine y={30} stroke="#10b981" strokeDasharray="3 3" label="Sobreventa" />
+                  <ReferenceLine y={50} stroke="#6b7280" strokeDasharray="2 2" />
+                </>
+              )}
+
+              {/* Líneas de osciladores */}
+              {oscillatorIndicators.map((indicator, idx) => (
+                <Line
+                  key={indicator}
+                  type="monotone"
+                  dataKey={indicator}
+                  stroke={indicatorColors[indicator] || `hsl(${idx * 60}, 70%, 50%)`}
+                  strokeWidth={2}
+                  dot={false}
+                  name={indicator}
+                  connectNulls
+                />
+              ))}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </>
+      )}
     </div>
   );
 };

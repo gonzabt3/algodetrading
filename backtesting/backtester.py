@@ -185,10 +185,16 @@ class Backtester:
         
         # Preparar datos de velas con indicadores para el gráfico
         chart_data = []
-        data_with_indicators = self.strategy.calculate_indicators(data.copy())
         
-        # Limitar a los últimos 100 puntos para no sobrecargar el frontend
-        display_data = data_with_indicators.tail(100)
+        # Usar el DataFrame que ya tiene los indicadores calculados
+        # Filtrar solo las filas donde las MAs tienen valores válidos (después del período de warm-up)
+        display_data = data.dropna(subset=[col for col in data.columns if col not in ['open', 'high', 'low', 'close', 'volume', 'signal']])
+        
+        # Debug: imprimir columnas disponibles
+        print(f"🔍 Columnas en el DataFrame: {list(data.columns)}")
+        print(f"🔍 Filas totales: {len(data)}, Filas con indicadores válidos: {len(display_data)}")
+        if len(display_data) > 0:
+            print(f"🔍 Primera fila con MAs: {display_data.iloc[0].to_dict()}")
         
         for idx, row in display_data.iterrows():
             point = {
@@ -200,11 +206,11 @@ class Backtester:
                 'volume': float(row['volume']) if 'volume' in row and not pd.isna(row['volume']) else None,
             }
             
-            # Agregar indicadores técnicos si existen
+            # Agregar indicadores técnicos (ahora todos deberían tener valores)
             for col in row.index:
                 if col not in ['open', 'high', 'low', 'close', 'volume', 'signal']:
-                    if not pd.isna(row[col]):
-                        point[col] = float(row[col])
+                    # Ya no filtramos NaN porque dropna() ya lo hizo
+                    point[col] = float(row[col])
             
             chart_data.append(point)
         
